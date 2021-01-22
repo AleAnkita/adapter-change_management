@@ -84,15 +84,15 @@ class ServiceNowAdapter extends EventEmitter {
     }
 
     /**
-    * @memberof ServiceNowAdapter
-    * @method healthcheck
-    * @summary Check ServiceNow Health
-    * @description Verifies external system is available and healthy.
-    *   Calls method emitOnline if external system is available.
-    *
-    * @param {ServiceNowAdapter~requestCallback} [callback] - The optional callback
-    *   that handles the response.
-    */
+     * @memberof ServiceNowAdapter
+     * @method healthcheck
+     * @summary Check ServiceNow Health
+     * @description Verifies external system is available and healthy.
+     *   Calls method emitOnline if external system is available.
+     *
+     * @param {ServiceNowAdapter~requestCallback} [callback] - The optional callback
+     *   that handles the response.
+     */
     healthcheck(callback) {
         this.getRecord((result, error) => {
             /**
@@ -101,8 +101,6 @@ class ServiceNowAdapter extends EventEmitter {
              * or the instance was hibernating. You must write
              * the blocks for each branch.
              */
-            let callbackData = null;
-            let callbackError = null;
             if (error) {
                 /**
                  * Write this block.
@@ -117,11 +115,7 @@ class ServiceNowAdapter extends EventEmitter {
                  * for the callback's errorMessage parameter.
                  */
                 this.emitOffline();
-                log.error(`Error occured in ServiceNow instance:${this.id}: ${error}`);
-                if (callback) {
-                    callbackError = error;
-                    return callback(callbackData, callbackError)
-                }
+                log.error(`ServiceNow getRecord Error:${this.id} : ${error}`);
             } else {
                 /**
                  * Write this block.
@@ -134,11 +128,7 @@ class ServiceNowAdapter extends EventEmitter {
                  * responseData parameter.
                  */
                 this.emitOnline();
-                log.debug(`ServiceNow instance is available`);
-                if (callback) {
-                    callbackData = result;
-                    return callback(callbackData, callbackError)
-                }
+                log.debug(`ServiceNow: getRecord successfully executed and return response : ${result}`);
             }
         });
     }
@@ -196,32 +186,25 @@ class ServiceNowAdapter extends EventEmitter {
          * Note how the object was instantiated in the constructor().
          * get() takes a callback function.
          */
-        let updatedRecordsArray = [];
+
         this.connector.get((data, error) => {
-            if (error) {
-                log.error(`\nError returned from GET request:\n${JSON.stringify(error)}`);
-            }
-            if (typeof data === 'object' && data.hasOwnProperty('body')) {
-                let bodyObj = JSON.parse(data.body);
-                let extractedRecords = bodyObj.result;
-                if (Array.isArray(extractedRecords)) {
-                    for (let i = 0; i < extractedRecords.length; i++) {
-                        let updatedObj = {};
-                        updatedObj.change_ticket_number = extractedRecords[i].number;
-                        updatedObj.active = extractedRecords[i].active;
-                        updatedObj.priority = extractedRecords[i].priority;
-                        updatedObj.description = extractedRecords[i].description;
-                        updatedObj.work_start = extractedRecords[i].work_start;
-                        updatedObj.work_end = extractedRecords[i].work_end;
-                        updatedObj.change_ticket_key = extractedRecords[i].sys_id;
-                        updatedRecordsArray.push(updatedObj);
-                    }
+            if (data && data.body) {
+                const records = JSON.parse(data.body).result;
+                const modifiedRecords = [];
 
-                }
-
+                for (let record of records)
+                    modifiedRecords.push({
+                        change_ticket_number: record.number,
+                        active: record.active,
+                        priority: record.priority,
+                        description: record.description,
+                        work_start: record.work_start,
+                        work_end: record.work_end,
+                        change_ticket_key: record.sys_id
+                    });
+                return callback(modifiedRecords, error);
             }
-            log.info(`\nResponse returned from GET request:\n${JSON.stringify(updatedRecordsArray)}`)
-            return callback(updatedRecordsArray, error);
+            callback(data, error);
         });
     }
 
@@ -242,26 +225,21 @@ class ServiceNowAdapter extends EventEmitter {
          * post() takes a callback function.
          */
         this.connector.post((data, error) => {
-            if (error) {
-                log.error(`\nError returned from POST request:\n${JSON.stringify(error)}`);
+
+            if (data && data.body) {
+                const record = JSON.parse(data.body).result;
+
+                return callback({
+                    change_ticket_number: record.number,
+                    change_ticket_key: record.sys_id,
+                    active: record.active,
+                    priority: record.priority,
+                    description: record.description,
+                    work_start: record.work_start,
+                    work_end: record.work_end
+                }, error);
             }
-            if (typeof data === 'object' && data.hasOwnProperty('body')) {
-                let bodyObj = JSON.parse(data.body);
-                let extractedRecords = bodyObj['result'];
-                if (typeof extractedRecords === 'object') {
-                    log.info('post record result :', extractedRecords);
-                    let updatedObj = {};
-                    updatedObj.change_ticket_number = extractedRecords.number;
-                    updatedObj.active = extractedRecords.active;
-                    updatedObj.priority = extractedRecords.priority;
-                    updatedObj.description = extractedRecords.description;
-                    updatedObj.work_start = extractedRecords.work_start;
-                    updatedObj.work_end = extractedRecords.work_end;
-                    updatedObj.change_ticket_key = extractedRecords.sys_id;
-                    log.info(`\nResponse returned from POST request:\n${JSON.stringify(updatedObj)}`);
-                    return callback(updatedObj, error)
-                }
-            }
+            callback(data, error);
         });
     }
 }
